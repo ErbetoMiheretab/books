@@ -5,6 +5,7 @@ Image preprocessing routines for Amharic text and Ethiopic numeral OCR.
 import cv2
 import numpy as np
 
+
 def to_grayscale(image: np.ndarray) -> np.ndarray:
     """Helper to convert BGR/RGB to Grayscale."""
     if len(image.shape) == 3:
@@ -103,7 +104,7 @@ def detect_if_numeral_heavy(image: np.ndarray) -> bool:
     h, w = gray.shape[:2]
     
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary)
+    num_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(binary)
     
     small_components = sum(1 for i in range(1, num_labels) 
                            if stats[i, cv2.CC_STAT_WIDTH] < w * 0.1 and stats[i, cv2.CC_STAT_HEIGHT] < h * 0.1)

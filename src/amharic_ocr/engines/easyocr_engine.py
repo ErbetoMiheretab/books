@@ -3,8 +3,9 @@ EasyOCR Engine implementation (optional fallback engine).
 """
 
 import numpy as np
-from .base import OCREngine, OCRResult
+
 from ..preprocessing.image_prep import to_grayscale
+from .base import OCREngine, OCRResult
 
 # Global reader instance for worker processes (prevents reloading per page)
 _reader_instance = None
@@ -24,7 +25,7 @@ def get_easyocr_reader(languages, gpu=False):
         
         try:
             _reader_instance = easyocr.Reader(ocr_langs, gpu=gpu, verbose=False)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _reader_instance = easyocr.Reader(['en'], gpu=gpu, verbose=False)
     return _reader_instance
 
@@ -55,7 +56,7 @@ class EasyOCREngine(OCREngine):
                 engine_name="easyocr",
                 metadata={"num_blocks": len(results)}
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return OCRResult(
                 text=f"[EasyOCR Error: {e}]",
                 confidence=0.0,

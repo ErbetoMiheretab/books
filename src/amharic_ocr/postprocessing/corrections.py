@@ -3,13 +3,14 @@ Post-processing and error corrections for Amharic text and Ethiopic numerals.
 """
 
 import re
-from typing import List
+
 from ..constants import (
-    ETHIOPIC_NUMERALS,
     ALL_ETHIOPIC_NUMERALS,
-    VISUAL_CONFUSIONS,
+    ETHIOPIC_NUMERALS,
     LATIN_TO_ETHIOPIC_LOOKALIKES,
+    VISUAL_CONFUSIONS,
 )
+
 
 def correct_visual_confusions(text: str) -> str:
     """
@@ -80,7 +81,7 @@ def convert_digits_to_ethiopic(text: str) -> str:
         text = text.replace(key, ETHIOPIC_NUMERALS[key])
     return text
 
-def extract_ethiopic_numerals(text: str) -> List[str]:
+def extract_ethiopic_numerals(text: str) -> list[str]:
     """Extract all runs of Ethiopic numerals from text."""
     pattern = rf'[{ALL_ETHIOPIC_NUMERALS}]+'
     return re.findall(pattern, text)

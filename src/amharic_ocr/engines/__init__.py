@@ -9,4 +9,4 @@ except ImportError:
         def recognize(self, image, config) -> OCRResult:
             return OCRResult(text="[EasyOCR is not installed]", confidence=0.0, engine_name="easyocr")
 
-__all__ = ["OCREngine", "OCRResult", "TesseractEngine", "EasyOCREngine"]
+__all__ = ["EasyOCREngine", "OCREngine", "OCRResult", "TesseractEngine"]

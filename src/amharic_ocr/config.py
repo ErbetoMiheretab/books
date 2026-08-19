@@ -3,7 +3,7 @@ Configuration options for the Amharic OCR pipeline.
 """
 
 from dataclasses import dataclass, field
-from typing import List
+
 
 @dataclass
 class OCRConfig:
@@ -18,7 +18,7 @@ class OCRConfig:
     use_easyocr: bool = False
     
     # Languages to load
-    languages: List[str] = field(default_factory=lambda: ["amh", "eng"])
+    languages: list[str] = field(default_factory=lambda: ["amh", "eng"])
     
     # Tesseract configuration
     tesseract_psm: int = 6

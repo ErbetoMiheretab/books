@@ -2,11 +2,11 @@
 Output generation for OCR results (Plain Text, JSON metadata, and Quality Review reports).
 """
 
-import os
 import json
-from typing import List, Dict, Any
+from typing import Any
 
-def save_text_output(results: List[Dict[str, Any]], output_path: str) -> None:
+
+def save_text_output(results: list[dict[str, Any]], output_path: str) -> None:
     """
     Save text output matching amh_ocr_nums.py structure:
     === Page X ===
@@ -22,7 +22,7 @@ def save_text_output(results: List[Dict[str, Any]], output_path: str) -> None:
                 f.write(f"[Numerals: {', '.join(result['numerals_found'])}]\n")
             f.write("\n")
 
-def save_json_output(results: List[Dict[str, Any]], output_path: str) -> None:
+def save_json_output(results: list[dict[str, Any]], output_path: str) -> None:
     """Save structured JSON output with page metadata and detected numerals."""
     serializable = []
     for r in results:
@@ -41,7 +41,7 @@ def save_json_output(results: List[Dict[str, Any]], output_path: str) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(serializable, f, ensure_ascii=False, indent=2)
 
-def generate_review_report(results: List[Dict[str, Any]], output_path: str) -> None:
+def generate_review_report(results: list[dict[str, Any]], output_path: str) -> None:
     """Generate quality diagnostic report for flagged pages."""
     flagged_pages = [r for r in results if r.get('flagged', False)]
     total_numerals = sum(len(r.get('numerals_found', [])) for r in results)

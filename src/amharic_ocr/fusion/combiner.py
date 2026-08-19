@@ -1,9 +1,10 @@
-from typing import List
+
 from ..engines.base import OCRResult
+
 
 class OCRResultCombiner:
     @staticmethod
-    def combine(results: List[OCRResult], strategy: str = "confidence") -> OCRResult:
+    def combine(results: list[OCRResult], strategy: str = "confidence") -> OCRResult:
         """
         Combine OCR results from multiple engines.
         

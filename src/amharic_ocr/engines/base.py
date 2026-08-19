@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+
 import numpy as np
+
 
 @dataclass
 class OCRResult:
@@ -16,4 +18,3 @@ class OCREngine(ABC):
         Run OCR engine on preprocessed numpy image.
         Returns an OCRResult object.
         """
-        pass

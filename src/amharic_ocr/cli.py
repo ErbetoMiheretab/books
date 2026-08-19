@@ -3,11 +3,12 @@ Command-line interface for Amharic OCR with Ethiopic Numeral Recognition.
 """
 
 import argparse
-import sys
 import os
+import sys
 
 from .config import OCRConfig
 from .pipeline import run_pipeline
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -122,7 +123,7 @@ def main():
 
     try:
         run_pipeline(pdf_file, config)
-    except Exception as e:
+    except (FileNotFoundError, RuntimeError, ValueError) as e:
         print(f"Error running pipeline: {e}")
         sys.exit(1)
 

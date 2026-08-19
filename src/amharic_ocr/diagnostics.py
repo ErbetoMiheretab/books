@@ -4,12 +4,14 @@ Diagnostics and system verification for Amharic OCR & Ethiopic Numeral Recogniti
 
 import os
 import sys
-import pytesseract
+
 import cv2
 import numpy as np
+import pytesseract
 from PIL import Image, ImageDraw, ImageFont
 
 from .engines.tesseract import TesseractEngine
+
 
 def test_numeral_recognition() -> str:
     """
@@ -32,7 +34,7 @@ def test_numeral_recognition() -> str:
             try:
                 font = ImageFont.truetype(font_path, 32)
                 break
-            except Exception:
+            except OSError:
                 pass
                 
     if font is None:
@@ -78,7 +80,7 @@ def check_system_setup():
             print("✅ EasyOCR is installed")
         else:
             print("⚠️  EasyOCR is NOT installed (optional fallback engine)")
-    except Exception:
+    except Exception:  # noqa: BLE001
         print("⚠️  EasyOCR is NOT installed (optional fallback engine)")
 
     # 5. Check Tesseract Setup
@@ -98,7 +100,7 @@ def check_system_setup():
         else:
             print("  ⚠️  'eng' (English) language pack is NOT installed")
             
-    except Exception as e:
+    except (pytesseract.TesseractNotFoundError, Exception) as e:  # noqa: BLE001
         print(f"❌ Error querying Tesseract languages: {e}")
         print("   To install, run: sudo apt-get install tesseract-ocr")
         

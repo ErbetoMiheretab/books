@@ -2,22 +2,25 @@
 Main execution pipeline for Amharic OCR with focused numeral recognition.
 """
 
-import os
 import multiprocessing as mp
+import os
+from collections.abc import Callable
+from typing import Any
+
 import pytesseract
-from typing import List, Dict, Any, Callable
 
 from .config import OCRConfig
 from .constants import ALL_ETHIOPIC_NUMERALS
-from .io.pdf_reader import get_page_count, render_page_to_numpy
-from .io.output_writer import save_text_output, save_json_output, generate_review_report
-from .preprocessing.page_split import split_image_horizontally
-from .preprocessing.image_prep import deskew, detect_if_numeral_heavy
 from .engines.tesseract import TesseractEngine
 from .fusion.combiner import OCRResultCombiner
-from .postprocessing.corrections import post_process_text, extract_ethiopic_numerals
+from .io.output_writer import generate_review_report, save_json_output, save_text_output
+from .io.pdf_reader import get_page_count, render_page_to_numpy
+from .postprocessing.corrections import extract_ethiopic_numerals, post_process_text
+from .preprocessing.image_prep import deskew, detect_if_numeral_heavy
+from .preprocessing.page_split import split_image_horizontally
 
-def process_single_page(args) -> List[Dict[str, Any]]:
+
+def process_single_page(args) -> list[dict[str, Any]]:
     """
     Worker function to process a single page of the PDF.
     Returns a list of page result dicts (multiple if split_pages is enabled).
@@ -98,7 +101,7 @@ def process_single_page(args) -> List[Dict[str, Any]]:
                 'review_reasons': reasons
             })
             
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         results.append({
             'page': str(page_num),
             'text': f"[ERROR: Page processing failed: {e}]",
@@ -112,7 +115,7 @@ def process_single_page(args) -> List[Dict[str, Any]]:
         
     return results
 
-def run_pipeline(pdf_path: str, config: OCRConfig = None, status_callback: Callable[[int, int], None] = None) -> List[Dict[str, Any]]:
+def run_pipeline(pdf_path: str, config: OCRConfig | None = None, status_callback: Callable[[int, int], None] | None = None) -> list[dict[str, Any]]:
     """
     Main entry point for running the extraction pipeline on a PDF file.
     """
@@ -131,7 +134,7 @@ def run_pipeline(pdf_path: str, config: OCRConfig = None, status_callback: Calla
         if 'amh' not in langs:
             print("⚠️  Warning: 'amh' language pack not found!")
             print("   Install with: sudo apt-get install tesseract-ocr-amh")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Could not check languages: {e}")
         
     num_pages = get_page_count(pdf_path)

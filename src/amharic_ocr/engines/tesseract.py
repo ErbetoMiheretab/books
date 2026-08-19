@@ -3,19 +3,21 @@ Tesseract OCR Engine with focused Amharic Fidel & Ethiopic Numeral recognition.
 Implements multi-PSM passes, character whitelisting, and fallback strategies from amh_ocr_nums.py.
 """
 
+
+import numpy as np
 import pytesseract
 from PIL import Image
-import numpy as np
-from typing import Optional, List, Tuple
-from .base import OCREngine, OCRResult
+
 from ..constants import ALL_ETHIOPIC_NUMERALS, AMHARIC_FIDEL, LATIN_CHARS
-from ..preprocessing.image_prep import preprocess_for_text, preprocess_for_numerals
+from ..preprocessing.image_prep import preprocess_for_numerals, preprocess_for_text
+from .base import OCREngine, OCRResult
+
 
 class TesseractEngine(OCREngine):
     def __init__(self):
         try:
             self.available_langs = pytesseract.get_languages()
-        except Exception:
+        except Exception:  # noqa: BLE001
             self.available_langs = []
 
     def _get_confidence(self, pil_img: Image.Image, lang: str, config_str: str) -> float:
@@ -26,13 +28,13 @@ class TesseractEngine(OCREngine):
             if confidences:
                 return float(np.mean(confidences)) / 100.0
             return 0.0
-        except Exception:
+        except Exception:  # noqa: BLE001
             return -1.0
 
     def ocr_with_whitelist(
         self, 
         image: np.ndarray, 
-        whitelist: Optional[str] = None, 
+        whitelist: str | None = None, 
         lang: str = "amh", 
         psm: int = 6, 
         oem: int = 3
@@ -65,7 +67,7 @@ class TesseractEngine(OCREngine):
                 engine_name=f"tesseract_{lang}_psm{psm}",
                 metadata={"psm": psm, "oem": oem, "lang": lang, "has_whitelist": bool(whitelist)}
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return OCRResult(
                 text=f"[Tesseract Error: {e}]",
                 confidence=0.0,
@@ -81,7 +83,7 @@ class TesseractEngine(OCREngine):
         whitelist = ALL_ETHIOPIC_NUMERALS
         processed = preprocess_for_numerals(image)
         
-        results: List[OCRResult] = []
+        results: list[OCRResult] = []
         
         # PSM 10: Single character mode (good for isolated numerals)
         res10 = self.ocr_with_whitelist(processed, whitelist=whitelist, lang="amh", psm=10)
@@ -121,7 +123,7 @@ class TesseractEngine(OCREngine):
         2. Approach 2: Numeral-focused (multi-PSM numeral whitelist)
         3. Approach 3: Standard amh+eng with no whitelist
         """
-        results: List[OCRResult] = []
+        results: list[OCRResult] = []
         
         # Determine language preference
         lang_str = "+".join(config.languages) if config and hasattr(config, 'languages') else "amh+eng"
@@ -132,7 +134,7 @@ class TesseractEngine(OCREngine):
             res1 = self.ocr_mixed_content(image, lang=lang_str, psm=psm_val)
             if res1.text and not res1.text.startswith("[Tesseract Error"):
                 results.append(res1)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
             
         # Approach 2: Numeral-focused
@@ -140,7 +142,7 @@ class TesseractEngine(OCREngine):
             res2 = self.ocr_numerals_only(image)
             if res2.text and not res2.text.startswith("[Tesseract Error"):
                 results.append(res2)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
             
         # Approach 3: Standard without whitelist
@@ -149,7 +151,7 @@ class TesseractEngine(OCREngine):
             res3 = self.ocr_with_whitelist(processed, whitelist=None, lang=lang_str, psm=psm_val)
             if res3.text and not res3.text.startswith("[Tesseract Error"):
                 results.append(res3)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
             
         if results:

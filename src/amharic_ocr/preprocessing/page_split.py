@@ -1,8 +1,8 @@
-import cv2
-import numpy as np
-from typing import List
 
-def split_image_horizontally(image: np.ndarray) -> List[np.ndarray]:
+import numpy as np
+
+
+def split_image_horizontally(image: np.ndarray) -> list[np.ndarray]:
     """
     Splits an image into Left and Right pages.
     Usually used when a PDF page contains two scanned book pages side-by-side.

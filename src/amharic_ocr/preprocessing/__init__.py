@@ -3,19 +3,19 @@ Image preprocessing routines.
 """
 
 from .image_prep import (
-    to_grayscale,
     deskew,
+    detect_if_numeral_heavy,
     preprocess_for_numerals,
     preprocess_for_text,
-    detect_if_numeral_heavy,
+    to_grayscale,
 )
 from .page_split import split_image_horizontally
 
 __all__ = [
-    "to_grayscale",
     "deskew",
+    "detect_if_numeral_heavy",
     "preprocess_for_numerals",
     "preprocess_for_text",
-    "detect_if_numeral_heavy",
     "split_image_horizontally",
+    "to_grayscale",
 ]

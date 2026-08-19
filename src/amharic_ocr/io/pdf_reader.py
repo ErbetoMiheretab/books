@@ -3,10 +3,10 @@ PDF Reader module for Amharic OCR.
 Provides fast in-memory page rendering via PyMuPDF (fitz) with pdf2image fallback.
 """
 
-import os
 import cv2
 import numpy as np
 from PIL import Image
+
 
 def get_page_count(pdf_path: str) -> int:
     """Returns total number of pages in a PDF file."""
@@ -16,7 +16,7 @@ def get_page_count(pdf_path: str) -> int:
         num_pages = len(doc)
         doc.close()
         return num_pages
-    except Exception:
+    except Exception:  # noqa: BLE001
         from pdf2image.pdf2image import _page_count
         return _page_count(pdf_path)
 
@@ -45,7 +45,7 @@ def render_page_to_numpy(pdf_path: str, page_num: int, dpi: int = 400) -> np.nda
         
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         return cv_img
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Fallback to pdf2image
         from pdf2image import convert_from_path
         images = convert_from_path(pdf_path, first_page=page_num, last_page=page_num, dpi=dpi)
