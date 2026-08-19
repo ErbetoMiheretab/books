@@ -9,3 +9,5 @@ wheels/
 # Virtual environments
 .venv
 *.pdf
+*.txt
+/output_texts

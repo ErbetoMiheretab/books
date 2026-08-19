@@ -238,11 +238,24 @@ def ocr_with_fallback(image):
 def correct_common_errors(text):
     """
     Fix common OCR errors for Ethiopic numerals.
+
+    IMPORTANT: corrections are applied token-by-token and ONLY to tokens that
+    are already numeral-zone candidates (i.e. tokens containing at least one
+    real Ethiopic numeral character or that consist solely of Latin look-alikes).
+    This prevents corrupting legitimate Amharic words or English abbreviations
+    that contain the same Latin glyphs.
     """
-    corrections = {
-        # Latin to Ethiopic
+    # Visually-ambiguous Ethiopic-only fixes (always safe to apply globally)
+    ethiopic_only_corrections = {
+        '፨': '፰',   # Often confused
+        '፧': '፯',   # Often confused
+        '፣': '፫',   # Comma-like -> 3
+    }
+
+    # Latin look-alike corrections — only applied within numeral-zone tokens
+    latin_to_ethiopic = {
         '1': '፩',
-        '2': '፪', 
+        '2': '፪',
         '3': '፫',
         '4': '፬',
         '5': '፭',
@@ -251,8 +264,6 @@ def correct_common_errors(text):
         '8': '፰',
         '9': '፱',
         '0': '፲',  # 10, not exactly 0
-        
-        # Common misrecognitions
         'l': '፩',   # lowercase L -> 1
         'I': '፩',   # uppercase I -> 1
         'O': '፬',   # letter O -> 4
@@ -261,18 +272,45 @@ def correct_common_errors(text):
         'T': '፯',   # letter T -> 7
         'B': '፰',   # letter B -> 8
         'g': '፱',   # letter g -> 9
-        
-        # Visual confusions
-        '፨': '፰',   # Often confused
-        '፧': '፯',   # Often confused
-        '፣': '፫',   # Comma-like -> 3
     }
-    
-    # Apply corrections
-    for wrong, correct in corrections.items():
+
+    # Apply Ethiopic-only corrections globally (safe)
+    for wrong, correct in ethiopic_only_corrections.items():
         text = text.replace(wrong, correct)
-    
+
+    # Build a pattern that matches a numeral-zone token:
+    # a contiguous run that contains at least one real Ethiopic numeral character,
+    # optionally mixed with the Latin look-alike characters above.
+    latin_lookalikes = ''.join(re.escape(c) for c in latin_to_ethiopic)
+    numeral_zone_pattern = re.compile(
+        rf'[{re.escape(ALL_ETHIOPIC_NUMERALS)}{latin_lookalikes}]*'
+        rf'[{re.escape(ALL_ETHIOPIC_NUMERALS)}]'
+        rf'[{re.escape(ALL_ETHIOPIC_NUMERALS)}{latin_lookalikes}]*'
+    )
+
+    def fix_token(m):
+        token = m.group(0)
+        for wrong, correct in latin_to_ethiopic.items():
+            token = token.replace(wrong, correct)
+        return token
+
+    text = numeral_zone_pattern.sub(fix_token, text)
     return text
+
+
+def _deduplicate_numeral(text):
+    """
+    Remove runs of the same Ethiopic numeral that look like OCR looping artifacts.
+    E.g. ፻፻፻ (three hundreds in a row with no valid composite meaning) is
+    collapsed to ፻.  Legitimate composites like ፻፳ (120) are left intact.
+    """
+    # Collapse 3+ consecutive identical numeral characters to 2 max
+    # (the maximum legitimate repetition in Ethiopic is typically ፻፻ = 10,000)
+    dedup_pattern = re.compile(
+        rf'([{re.escape(ALL_ETHIOPIC_NUMERALS)}])\1{{2,}}'
+    )
+    return dedup_pattern.sub(r'\1\1', text)
+
 
 def extract_numerals(text):
     """Extract only Ethiopic numerals from text."""
