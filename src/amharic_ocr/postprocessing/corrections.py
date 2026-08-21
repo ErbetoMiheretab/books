@@ -14,10 +14,11 @@ from ..constants import (
 
 def correct_visual_confusions(text: str) -> str:
     """
-    Safe corrections that fix obvious OCR confusion symbols globally:
-    - '፨' (section mark) -> '፰' (8)
-    - '፧' (semicolon)    -> '፯' (7)
-    - '፣' (comma)        -> '፫' (3)
+    Safe corrections that fix obvious OCR confusion symbols globally.
+    Only applies to characters that are never valid Amharic text:
+    - '፨' (paragraph separator) -> '፰' (8)
+    Note: '፣' (Ethiopic comma) and '፧' (Ethiopic question mark) are valid
+    Amharic punctuation and are NOT replaced here.
     """
     for wrong, correct in VISUAL_CONFUSIONS.items():
         text = text.replace(wrong, correct)

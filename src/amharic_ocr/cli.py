@@ -84,6 +84,12 @@ def main():
         help="Run synthetic Ethiopic numeral recognition test"
     )
 
+    parser.add_argument(
+        "--sauvola",
+        action="store_true",
+        help="Enable local Sauvola thresholding for image preprocessing (default: False)"
+    )
+
     args = parser.parse_args()
 
     if args.diagnose:
@@ -114,8 +120,10 @@ def main():
         use_easyocr=args.use_easyocr,
         easyocr_gpu=args.gpu,
         min_char_threshold=args.min_char,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        use_sauvola=args.sauvola
     )
+
 
     if not config.use_tesseract and not config.use_easyocr:
         print("Error: You cannot disable all OCR engines.")

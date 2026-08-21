@@ -8,7 +8,7 @@ import numpy as np
 import pytesseract
 from PIL import Image
 
-from ..constants import ALL_ETHIOPIC_NUMERALS, AMHARIC_FIDEL, LATIN_CHARS
+from ..constants import ALL_ETHIOPIC_NUMERALS, ALLOWED_EXTRA_CHARS, AMHARIC_FIDEL
 from ..preprocessing.image_prep import preprocess_for_numerals, preprocess_for_text
 from .base import OCREngine, OCRResult
 
@@ -31,6 +31,29 @@ class TesseractEngine(OCREngine):
         except Exception:  # noqa: BLE001
             return -1.0
 
+    def _build_config_file(self, psm: int, oem: int, whitelist: str | None) -> tuple[str, object | None]:
+        """
+        Write Tesseract options to a temp config file to avoid shlex quoting
+        issues with special characters (quotes, backslashes) in the whitelist.
+        Returns (config_string, tempfile_handle_or_None).
+        The caller is responsible for closing/deleting the tempfile handle.
+        """
+        import tempfile
+        base_config = f'--psm {psm} --oem {oem}'
+        if not whitelist:
+            return base_config, None
+        
+        # Write whitelist into a temp Tesseract .cfg file
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.cfg', delete=False, encoding='utf-8'
+        )
+        tmp.write(f'tessedit_char_whitelist {whitelist}\n')
+        tmp.flush()
+        tmp.close()
+        # Pass the config file path directly — no shlex parsing of its content
+        config_str = f'{base_config} {tmp.name}'
+        return config_str, tmp.name
+
     def ocr_with_whitelist(
         self, 
         image: np.ndarray, 
@@ -49,14 +72,10 @@ class TesseractEngine(OCREngine):
             psm: Page Segmentation Mode
             oem: OCR Engine Mode (3 = default)
         """
+        import os
         pil_img = Image.fromarray(image)
         
-        # Build configuration
-        config_str = f'--psm {psm} --oem {oem}'
-        if whitelist:
-            # Escape special regex characters in whitelist
-            escaped_wl = whitelist.replace('\\', '\\\\').replace('-', '\\-')
-            config_str += f' -c tessedit_char_whitelist={escaped_wl}'
+        config_str, tmp_path = self._build_config_file(psm, oem, whitelist)
             
         try:
             text = pytesseract.image_to_string(pil_img, lang=lang, config=config_str).strip()
@@ -74,14 +93,20 @@ class TesseractEngine(OCREngine):
                 engine_name="tesseract_error",
                 metadata={"error": str(e)}
             )
+        finally:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
-    def ocr_numerals_only(self, image: np.ndarray) -> OCRResult:
+    def ocr_numerals_only(self, image: np.ndarray, use_sauvola: bool = False) -> OCRResult:
         """
         OCR focused only on Ethiopic numerals.
         Applies gentle numeral preprocessing and tests PSM 10, 7, and 8.
         """
         whitelist = ALL_ETHIOPIC_NUMERALS
-        processed = preprocess_for_numerals(image)
+        processed = preprocess_for_numerals(image, use_sauvola=use_sauvola)
         
         results: list[OCRResult] = []
         
@@ -103,12 +128,12 @@ class TesseractEngine(OCREngine):
             return max(valid_results, key=lambda r: len(r.text))
         return results[0] if results else OCRResult(text="", confidence=0.0, engine_name="tesseract_numerals")
 
-    def ocr_mixed_content(self, image: np.ndarray, lang: str = "amh+eng", psm: int = 6) -> OCRResult:
+    def ocr_mixed_content(self, image: np.ndarray, lang: str = "amh+eng", psm: int = 6, use_sauvola: bool = False) -> OCRResult:
         """
         OCR for mixed Amharic text and numerals using combined whitelist.
         """
-        whitelist = AMHARIC_FIDEL + ALL_ETHIOPIC_NUMERALS + LATIN_CHARS
-        processed = preprocess_for_text(image)
+        whitelist = AMHARIC_FIDEL + ALL_ETHIOPIC_NUMERALS + ALLOWED_EXTRA_CHARS
+        processed = preprocess_for_text(image, use_sauvola=use_sauvola)
         
         # Check language availability
         if 'amh' not in self.available_langs:
@@ -118,20 +143,34 @@ class TesseractEngine(OCREngine):
 
     def ocr_with_fallback(self, image: np.ndarray, config=None) -> OCRResult:
         """
-        Try multiple OCR approaches and combine results as designed in amh_ocr_nums.py:
-        1. Approach 1: Mixed content with whitelist (amh+eng, psm=6)
-        2. Approach 2: Numeral-focused (multi-PSM numeral whitelist)
-        3. Approach 3: Standard amh+eng with no whitelist
+        Multi-approach OCR with fallback strategies:
+        0. Approach 0: Raw image (no preprocessing) — best for clean high-DPI scans
+        1. Approach 1: Mixed content with full whitelist (preprocessed)
+        2. Approach 2: Numeral-focused multi-PSM whitelist
+        3. Approach 3: Preprocessed, no whitelist
+        Returns the longest non-error result.
         """
         results: list[OCRResult] = []
         
-        # Determine language preference
+        # Determine language preference and preprocessing options
         lang_str = "+".join(config.languages) if config and hasattr(config, 'languages') else "amh+eng"
         psm_val = config.tesseract_psm if config and hasattr(config, 'tesseract_psm') else 6
+        use_sauvola = config.use_sauvola if config and hasattr(config, 'use_sauvola') else False
         
-        # Approach 1: Mixed content with whitelist
+        # Approach 0: Raw image — no preprocessing, no whitelist.
+        # For clean 400 DPI colour or grayscale scans, Tesseract performs best
+        # on the unmodified image. Preprocessing (Otsu, median blur) can destroy
+        # Fidel strokes at high DPI.
         try:
-            res1 = self.ocr_mixed_content(image, lang=lang_str, psm=psm_val)
+            res0 = self.ocr_with_whitelist(image, whitelist=None, lang=lang_str, psm=psm_val)
+            if res0.text and not res0.text.startswith("[Tesseract Error"):
+                results.append(res0)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+        # Approach 1: Mixed content with full whitelist (preprocessed)
+        try:
+            res1 = self.ocr_mixed_content(image, lang=lang_str, psm=psm_val, use_sauvola=use_sauvola)
             if res1.text and not res1.text.startswith("[Tesseract Error"):
                 results.append(res1)
         except Exception:  # noqa: BLE001, S110
@@ -139,15 +178,15 @@ class TesseractEngine(OCREngine):
             
         # Approach 2: Numeral-focused
         try:
-            res2 = self.ocr_numerals_only(image)
+            res2 = self.ocr_numerals_only(image, use_sauvola=use_sauvola)
             if res2.text and not res2.text.startswith("[Tesseract Error"):
                 results.append(res2)
         except Exception:  # noqa: BLE001, S110
             pass
             
-        # Approach 3: Standard without whitelist
+        # Approach 3: Preprocessed, no whitelist (fallback for low-quality scans)
         try:
-            processed = preprocess_for_text(image)
+            processed = preprocess_for_text(image, use_sauvola=use_sauvola)
             res3 = self.ocr_with_whitelist(processed, whitelist=None, lang=lang_str, psm=psm_val)
             if res3.text and not res3.text.startswith("[Tesseract Error"):
                 results.append(res3)
@@ -155,7 +194,7 @@ class TesseractEngine(OCREngine):
             pass
             
         if results:
-            # Pick longest valid text result
+            # Pick longest valid text result — raw approach wins when scan quality is good
             return max(results, key=lambda r: len(r.text))
             
         return OCRResult(text="", confidence=0.0, engine_name="tesseract_fallback")
