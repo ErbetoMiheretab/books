@@ -6,8 +6,8 @@ import argparse
 import os
 import sys
 
-from .config import OCRConfig
-from .pipeline import run_pipeline
+from amharic_ocr.config import OCRConfig
+from amharic_ocr.pipeline import run_pipeline
 
 
 def main():
