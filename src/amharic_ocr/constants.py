@@ -43,14 +43,31 @@ AMHARIC_FIDEL = (
     "ፈፉፊፋፌፍፎፏፐፑፒፓፔፕፖፗፘፙፚ"
 )
 
+# Ethiopic punctuation characters used in Amharic text
+# These MUST be in the whitelist or Tesseract will suppress them entirely.
+ETHIOPIC_PUNCTUATION = (
+    "።"   # U+1362 Ethiopic full stop
+    "፡"   # U+1361 Ethiopic wordspace
+    "፣"   # U+1363 Ethiopic comma
+    "፤"   # U+1364 Ethiopic semicolon
+    "፥"   # U+1365 Ethiopic colon
+    "፦"   # U+1366 Ethiopic preface colon
+    "፧"   # U+1367 Ethiopic question mark
+    "፨"   # U+1368 Ethiopic paragraph separator
+    "«»"  # angle quotes used in some Amharic prints
+)
+
 # Common punctuation and Latin characters for mixed OCR
 LATIN_CHARS = "0123456789 .,;:!?()[]{}-'\"\\\n"
 
+# Combined extra characters allowed in the mixed-content whitelist
+ALLOWED_EXTRA_CHARS = LATIN_CHARS + ETHIOPIC_PUNCTUATION
+
 # Visually-ambiguous Ethiopic OCR confusions (safe to correct globally)
+# NOTE: ፣ (Ethiopic comma) is intentionally NOT mapped here — it is a valid
+# punctuation mark in real Amharic text and must not be silently converted to ፫.
 VISUAL_CONFUSIONS = {
-    '፨': '፰',   # Section mark confused with 8 (፰)
-    '፧': '፯',   # Ethiopic semicolon confused with 7 (፯)
-    '፣': '፫',   # Ethiopic comma confused with 3 (፫)
+    '፨': '፰',   # Ethiopic paragraph separator confused with 8 (፰) — rare in body text
 }
 
 # Latin characters frequently misrecognized instead of Ethiopic numerals

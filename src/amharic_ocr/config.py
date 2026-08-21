@@ -35,3 +35,7 @@ class OCRConfig:
     
     # Numeral config
     detect_numerals: bool = True
+
+    # Preprocessing config
+    use_sauvola: bool = False
+

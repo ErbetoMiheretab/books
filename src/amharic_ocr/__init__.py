@@ -3,7 +3,7 @@ Amharic OCR Package with focused Ethiopic Numeral Recognition.
 """
 
 from .config import OCRConfig
-from .constants import ALL_ETHIOPIC_NUMERALS, AMHARIC_FIDEL, ETHIOPIC_NUMERALS
+from .constants import ALL_ETHIOPIC_NUMERALS, ALLOWED_EXTRA_CHARS, AMHARIC_FIDEL, ETHIOPIC_NUMERALS, ETHIOPIC_PUNCTUATION
 from .diagnostics import check_system_setup, test_numeral_recognition
 from .engines.tesseract import TesseractEngine
 from .pipeline import process_single_page, run_pipeline
