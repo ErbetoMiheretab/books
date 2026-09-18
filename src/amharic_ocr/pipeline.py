@@ -16,7 +16,12 @@ from .fusion.combiner import OCRResultCombiner
 from .io.output_writer import generate_review_report, save_json_output, save_text_output
 from .io.pdf_reader import get_page_count, render_page_to_numpy
 from .postprocessing.corrections import extract_ethiopic_numerals, post_process_text
-from .preprocessing.image_prep import deskew, detect_if_numeral_heavy
+from .preprocessing.image_prep import (
+    deskew,
+    detect_if_numeral_heavy,
+    remove_binding_shadow,
+    remove_scan_artifacts,
+)
 from .preprocessing.page_split import split_image_horizontally
 
 
@@ -43,22 +48,25 @@ def process_single_page(args) -> list[dict[str, Any]]:
             # 3. Deskew image for better alignment
             sub_img_deskewed = deskew(sub_img)
             
-            # 4. Detect if image contains mostly numerals
-            is_numeral_heavy = detect_if_numeral_heavy(sub_img_deskewed)
+            # 4. Remove dark book-binding shadow and scanner watermarks/margins
+            sub_img_cleaned = remove_scan_artifacts(remove_binding_shadow(sub_img_deskewed))
+            
+            # 5. Detect if image contains mostly numerals
+            is_numeral_heavy = detect_if_numeral_heavy(sub_img_cleaned)
             
             engine_outputs = []
             
-            # 5. Run Tesseract engine (with multi-PSM numeral fallback)
+            # 6. Run Tesseract engine (with multi-PSM numeral fallback)
             if config.use_tesseract:
                 tess = TesseractEngine()
-                t_res = tess.recognize(sub_img_deskewed, config)
+                t_res = tess.recognize(sub_img_cleaned, config)
                 engine_outputs.append(t_res)
                 
-            # 6. Run EasyOCR engine if enabled
+            # 7. Run EasyOCR engine if enabled
             if config.use_easyocr:
                 from .engines.easyocr_engine import EasyOCREngine
                 easy = EasyOCREngine()
-                e_res = easy.recognize(sub_img_deskewed, config)
+                e_res = easy.recognize(sub_img_cleaned, config)
                 engine_outputs.append(e_res)
                 
             # 7. Combine results from engines

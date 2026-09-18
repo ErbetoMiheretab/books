@@ -12,6 +12,78 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
         return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return image.copy()
 
+
+def remove_binding_shadow(image: np.ndarray) -> np.ndarray:
+    """
+    Detect and crop the dark vertical band produced by book spine binding.
+
+    Scanned books have a dark shadow along the binding edge (left or right)
+    that Tesseract misreads as pipe characters '|' and random Latin glyphs.
+    This function:
+    1. Profiles mean brightness per column in the left and right 20% margins.
+    2. Finds the outermost contiguous run of very dark columns (mean < 80).
+    3. Crops past the shadow, adding a small padding so no text is lost.
+    """
+    gray = to_grayscale(image)
+    h, w = gray.shape[:2]
+
+    # Per-column mean brightness
+    col_means = np.mean(gray, axis=0)
+
+    # --- Left binding shadow ---
+    dark_threshold = 80
+    left_limit = int(w * 0.20)  # only inspect the leftmost 20%
+    shadow_end_left = 0
+    for i in range(left_limit):
+        if col_means[i] < dark_threshold:
+            shadow_end_left = i
+
+    # --- Right binding shadow ---
+    right_start = int(w * 0.80)
+    shadow_start_right = w
+    for i in range(w - 1, right_start - 1, -1):
+        if col_means[i] < dark_threshold:
+            shadow_start_right = i
+
+    # Add a small padding (0.5% of width) past the shadow boundary
+    pad = max(int(w * 0.005), 5)
+    crop_left = min(shadow_end_left + pad, left_limit)
+    crop_right = max(shadow_start_right - pad, right_start)
+
+    # Only crop if a meaningful shadow was actually detected
+    if crop_left > pad or crop_right < w - pad:
+        image = image[:, crop_left:crop_right]
+
+    return image
+
+
+def remove_scan_artifacts(image: np.ndarray) -> np.ndarray:
+    """
+    Remove common scanner artifacts from the image margins.
+
+    Handles:
+    - CamScanner / scanner-app watermark text at the very bottom
+    - Thin border lines at page edges (frame borders)
+
+    The bottom 8% of the image is inspected; if it is mostly empty
+    (high mean brightness) it is trimmed so that the watermark text
+    does not pollute OCR output.
+    """
+    gray = to_grayscale(image)
+    h, w = gray.shape[:2]
+
+    # Inspect the bottom 8% for watermark / whitespace
+    bottom_start = int(h * 0.92)
+    bottom_strip = gray[bottom_start:, :]
+    strip_mean = np.mean(bottom_strip)
+
+    # Watermark regions are mostly white (mean > 220) with a few dark chars
+    if strip_mean > 210:
+        image = image[:bottom_start, :]
+
+    return image
+
+
 def deskew(image: np.ndarray) -> np.ndarray:
     """
     Fix image skew/rotation for better OCR alignment.
@@ -139,7 +211,16 @@ def preprocess_for_text(image: np.ndarray, use_sauvola: bool = False) -> np.ndar
 def detect_if_numeral_heavy(image: np.ndarray) -> bool:
     """
     Heuristic to detect if image contains mostly numerals/sparse structures.
-    Based on connected component counts and aspect ratios.
+    Based on the ratio of small isolated components to total components.
+
+    The old threshold of 20 small components triggered on virtually every
+    400 DPI text page (Fidel characters produce hundreds of small connected
+    components), causing false positives that then corrupted body text
+    through numeral-zone Latin-to-Ethiopic conversions.
+
+    Now requires that >70% of all components are small AND the total text
+    ink coverage is low (< 5% of image area), which genuinely indicates
+    a numeral table or sparse numeral list rather than body text.
     """
     gray = to_grayscale(image)
     h, w = gray.shape[:2]
@@ -147,7 +228,20 @@ def detect_if_numeral_heavy(image: np.ndarray) -> bool:
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     num_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(binary)
     
+    if num_labels <= 1:
+        return False
+
+    # Count components excluding the background (label 0)
+    total_components = num_labels - 1
     small_components = sum(1 for i in range(1, num_labels) 
-                           if stats[i, cv2.CC_STAT_WIDTH] < w * 0.1 and stats[i, cv2.CC_STAT_HEIGHT] < h * 0.1)
-    
-    return small_components > 20
+                           if stats[i, cv2.CC_STAT_WIDTH] < w * 0.05
+                           and stats[i, cv2.CC_STAT_HEIGHT] < h * 0.05)
+
+    # Ink coverage: fraction of the image that is foreground
+    ink_pixels = np.count_nonzero(binary)
+    ink_ratio = ink_pixels / (h * w)
+
+    small_ratio = small_components / total_components
+
+    # Numeral-heavy = mostly tiny isolated glyphs AND low ink coverage
+    return small_ratio > 0.70 and ink_ratio < 0.05 and total_components < 200
