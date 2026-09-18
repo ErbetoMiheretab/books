@@ -196,15 +196,8 @@ class TesseractEngine(OCREngine):
             pass
             
         if results:
-            # Weighted score: confidence (70%) + capped length ratio (30%).
-            # Prevents no-whitelist passes on noisy images from hallucinating
-            # many garbage chars and beating shorter but accurate results.
-            def _score(r: OCRResult) -> float:
-                conf = max(r.confidence, 0.0)  # treat -1 (unsupported) as 0
-                length_score = min(len(r.text) / 500.0, 1.0)
-                return conf * 0.7 + length_score * 0.3
-
-            return max(results, key=_score)
+            from ..fusion.combiner import score_ocr_result
+            return max(results, key=score_ocr_result)
 
         return OCRResult(text="", confidence=0.0, engine_name="tesseract_fallback")
 

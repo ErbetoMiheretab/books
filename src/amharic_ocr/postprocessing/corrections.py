@@ -90,6 +90,30 @@ def extract_ethiopic_numerals(text: str) -> list[str]:
 # Alias
 extract_numerals = extract_ethiopic_numerals
 
+def clean_margin_artifacts(text: str) -> str:
+    """
+    Cleans recurring margin noise lines and characters caused by book bindings/page edges.
+    Strips isolated vertical bars, tildes, backticks, dashes, and orphaned single characters
+    at line boundaries without affecting valid Amharic punctuation (።, ፡, ፣, etc.).
+    """
+    lines = text.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Filter out lines that consist exclusively of noise characters
+        if re.fullmatch(r"^[|~^\\_`<>{}—\-\.\:\s]+$", stripped):
+            continue
+        # Remove leading noise chars often left by page borders: e.g. "| ", "— ", "• "
+        stripped = re.sub(r"^[|~^\\_`<>{}—\-•]+\s*", "", stripped)
+        # Remove trailing spine noise chars
+        stripped = re.sub(r"\s*[|~^\\_`<>{}—\-•]+$", "", stripped)
+        cleaned_lines.append(stripped)
+
+    # Collapse excessive blank lines
+    result = "\n".join(cleaned_lines)
+    return re.sub(r"\n{3,}", "\n\n", result).strip()
+
+
 def post_process_text(text: str, is_numeral_heavy: bool = False) -> str:
     """
     Applies the full post-processing pipeline to OCR text:
@@ -98,6 +122,7 @@ def post_process_text(text: str, is_numeral_heavy: bool = False) -> str:
        These are restricted to numeral-heavy pages to avoid corrupting body text
        that happens to contain Latin characters adjacent to Ethiopic numerals.
     3. Remove OCR duplication loops.
+    4. Clean line margin artifacts (binding noise, scanner edge bars).
     """
     # Step 1: always safe — only replaces characters that are never valid body text
     text = correct_visual_confusions(text)
@@ -109,4 +134,7 @@ def post_process_text(text: str, is_numeral_heavy: bool = False) -> str:
 
     # Step 3: collapse repeated numeral artifacts (safe on all pages)
     text = deduplicate_numeral_loops(text)
+
+    # Step 4: clean margin artifacts
+    text = clean_margin_artifacts(text)
     return text

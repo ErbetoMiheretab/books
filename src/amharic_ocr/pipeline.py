@@ -17,6 +17,7 @@ from .io.output_writer import generate_review_report, save_json_output, save_tex
 from .io.pdf_reader import get_page_count, render_page_to_numpy
 from .postprocessing.corrections import extract_ethiopic_numerals, post_process_text
 from .preprocessing.image_prep import (
+    crop_to_text_content,
     deskew,
     detect_if_numeral_heavy,
     remove_binding_shadow,
@@ -48,8 +49,10 @@ def process_single_page(args) -> list[dict[str, Any]]:
             # 3. Deskew image for better alignment
             sub_img_deskewed = deskew(sub_img)
             
-            # 4. Remove dark book-binding shadow and scanner watermarks/margins
-            sub_img_cleaned = remove_scan_artifacts(remove_binding_shadow(sub_img_deskewed))
+            # 4. Remove dark book-binding shadow, scanner watermarks/margins, and crop to content
+            sub_img_cleaned = crop_to_text_content(
+                remove_scan_artifacts(remove_binding_shadow(sub_img_deskewed))
+            )
             
             # 5. Detect if image contains mostly numerals
             is_numeral_heavy = detect_if_numeral_heavy(sub_img_cleaned)

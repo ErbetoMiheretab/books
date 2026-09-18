@@ -13,6 +13,84 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
     return image.copy()
 
 
+def normalize_background(image: np.ndarray) -> np.ndarray:
+    """
+    Flat-field background illumination normalization.
+    Compensates for uneven lighting, shadows across book spine, and yellowed paper.
+    Uses morphological dilation to estimate background and normalizes against it.
+    """
+    gray = to_grayscale(image)
+    # 51x51 kernel captures slow background illumination changes without capturing text glyphs
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (51, 51))
+    dilated = cv2.morphologyEx(gray, cv2.MORPH_DILATE, kernel)
+    norm = cv2.divide(gray, dilated, scale=255)
+    return norm
+
+
+def apply_clahe(image: np.ndarray, clip_limit: float = 2.0, tile_grid_size: tuple[int, int] = (8, 8)) -> np.ndarray:
+    """
+    Contrast Limited Adaptive Histogram Equalization.
+    Enhances faint Fidel characters on faded or aged paper.
+    """
+    gray = to_grayscale(image)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    return clahe.apply(gray)
+
+
+def crop_to_text_content(image: np.ndarray, padding_ratio: float = 0.02) -> np.ndarray:
+    """
+    Content-aware text block detection and margin cropping.
+    Merges words and lines via morphological operations to identify the bounding
+    box of actual page content, removing scanner borders, dark gutters, and empty margins.
+    """
+    gray = to_grayscale(image)
+    h, w = gray.shape[:2]
+
+    # Otsu thresholding inverted (text foreground is white)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Dynamic kernel size proportional to image dimensions
+    k_w = max(int(w * 0.02), 15)
+    k_h = max(int(h * 0.01), 10)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k_w, k_h))
+    dilated = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return image
+
+    min_x, min_y = w, h
+    max_x, max_y = 0, 0
+    min_area = (w * h) * 0.0005  # Filter out tiny speckles/dust
+
+    found_content = False
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area > min_area:
+            x, y, cw, ch = cv2.boundingRect(cnt)
+            # Skip outer boundary frames that span almost the entire image
+            if cw > w * 0.98 and ch > h * 0.98:
+                continue
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x + cw)
+            max_y = max(max_y, y + ch)
+            found_content = True
+
+    if not found_content or min_x >= max_x or min_y >= max_y:
+        return image
+
+    pad_x = int(w * padding_ratio)
+    pad_y = int(h * padding_ratio)
+
+    x1 = max(0, min_x - pad_x)
+    y1 = max(0, min_y - pad_y)
+    x2 = min(w, max_x + pad_x)
+    y2 = min(h, max_y + pad_y)
+
+    return image[y1:y2, x1:x2]
+
+
 def remove_binding_shadow(image: np.ndarray) -> np.ndarray:
     """
     Detect and crop the dark vertical band produced by book spine binding.
@@ -181,11 +259,13 @@ def preprocess_for_numerals(image: np.ndarray, use_sauvola: bool = False) -> np.
     
     return binary
 
-def preprocess_for_text(image: np.ndarray, use_sauvola: bool = False) -> np.ndarray:
+def preprocess_for_text(image: np.ndarray, use_sauvola: bool = False, enhance_contrast: bool = True) -> np.ndarray:
     """
     Standard preprocessing for Amharic text:
     - Grayscale conversion
+    - Flat-field illumination normalization (removes page yellowing / dark shadows)
     - Median blur denoising (kernel=3 to preserve fine Fidel stroke variations)
+    - Contrast enhancement (CLAHE)
     - Otsu thresholding or Sauvola local thresholding
     """
     gray = to_grayscale(image)
@@ -195,10 +275,16 @@ def preprocess_for_text(image: np.ndarray, use_sauvola: bool = False) -> np.ndar
         scale = 100 / min(gray.shape)
         gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
+    # Normalize background illumination surface to level lighting gradients
+    normalized = normalize_background(gray)
+
     # Use a 3×3 kernel instead of 5×5: Fidel order-mark hooks (e.g. ሰ→ሶ) differ
     # by just a few pixels; a 5-pixel blur erases them and collapses entire
     # character columns into the same glyph.
-    denoised = cv2.medianBlur(gray, 3)
+    denoised = cv2.medianBlur(normalized, 3)
+
+    if enhance_contrast:
+        denoised = apply_clahe(denoised, clip_limit=2.0)
 
     if use_sauvola:
         binary = sauvola_threshold(denoised)
