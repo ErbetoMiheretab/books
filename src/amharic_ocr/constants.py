@@ -70,24 +70,24 @@ VISUAL_CONFUSIONS = {
     '፨': '፰',   # Ethiopic paragraph separator confused with 8 (፰) — rare in body text
 }
 
-# Latin characters frequently misrecognized instead of Ethiopic numerals
+# Latin characters frequently misrecognized instead of Ethiopic numerals.
+# IMPORTANT: These are applied ONLY within numeral zones (tokens that already
+# contain a real Ethiopic numeral) — see correct_latin_lookalikes() in corrections.py.
+# Only include characters with clear, unambiguous visual similarity to an Ethiopic
+# numeral glyph. Risky mappings for characters common in Amharic text or dates
+# ('0', 'O', 'S', 'b', 'g') have been intentionally omitted.
 LATIN_TO_ETHIOPIC_LOOKALIKES = {
-    '1': '፩',
-    '2': '፪',
-    '3': '፫',
-    '4': '፬',
-    '5': '፭',
-    '6': '፮',
-    '7': '፯',
-    '8': '፰',
-    '9': '፱',
-    '0': '፲',  # 10, not exactly 0
-    'l': '፩',   # lowercase L -> 1
-    'I': '፩',   # uppercase I -> 1
-    'O': '፬',   # letter O -> 4
-    'S': '፭',   # letter S -> 5
-    'b': '፮',   # letter b -> 6
-    'T': '፯',   # letter T -> 7
-    'B': '፰',   # letter B -> 8
-    'g': '፱',   # letter g -> 9
+    'l': '፩',   # lowercase L → 1 (identical stroke)
+    'I': '፩',   # uppercase I → 1 (identical stroke)
+    '1': '፩',   # digit 1 → ፩ (within numeral zones only)
+    '2': '፪',   # digit 2 → ፪
+    '3': '፫',   # digit 3 → ፫
+    '4': '፬',   # digit 4 → ፬
+    '5': '፭',   # digit 5 → ፭
+    '6': '፮',   # digit 6 → ፮
+    '7': '፯',   # digit 7 → ፯
+    '8': '፰',   # digit 8 → ፰
+    '9': '፱',   # digit 9 → ፱
+    'T': '፯',   # uppercase T → 7 (crossbar resemblance)
+    'B': '፰',   # uppercase B → 8 (loop resemblance)
 }

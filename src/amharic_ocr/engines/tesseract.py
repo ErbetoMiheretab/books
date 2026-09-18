@@ -60,7 +60,7 @@ class TesseractEngine(OCREngine):
         whitelist: str | None = None, 
         lang: str = "amh", 
         psm: int = 6, 
-        oem: int = 3
+        oem: int = 1
     ) -> OCRResult:
         """
         Run OCR with a specific character whitelist and PSM.
@@ -70,7 +70,7 @@ class TesseractEngine(OCREngine):
             whitelist: String of allowed characters
             lang: Language code ('amh', 'amh+eng', etc.)
             psm: Page Segmentation Mode
-            oem: OCR Engine Mode (3 = default)
+            oem: OCR Engine Mode (1 = LSTM only, best for Amharic)
         """
         import os
         pil_img = Image.fromarray(image)
@@ -122,10 +122,12 @@ class TesseractEngine(OCREngine):
         res8 = self.ocr_with_whitelist(processed, whitelist=whitelist, lang="amh", psm=8)
         results.append(res8)
         
-        # Select best result (longest non-empty valid string)
+        # Select best result: prefer highest confidence, use length as tiebreaker.
+        # PSM 7 on a large image can produce a longer garbage string than the correct
+        # PSM 10 single-character result; confidence disambiguates correctly.
         valid_results = [r for r in results if r.text and not r.text.startswith("[Tesseract Error")]
         if valid_results:
-            return max(valid_results, key=lambda r: len(r.text))
+            return max(valid_results, key=lambda r: (r.confidence, len(r.text)))
         return results[0] if results else OCRResult(text="", confidence=0.0, engine_name="tesseract_numerals")
 
     def ocr_mixed_content(self, image: np.ndarray, lang: str = "amh+eng", psm: int = 6, use_sauvola: bool = False) -> OCRResult:
@@ -194,9 +196,16 @@ class TesseractEngine(OCREngine):
             pass
             
         if results:
-            # Pick longest valid text result — raw approach wins when scan quality is good
-            return max(results, key=lambda r: len(r.text))
-            
+            # Weighted score: confidence (70%) + capped length ratio (30%).
+            # Prevents no-whitelist passes on noisy images from hallucinating
+            # many garbage chars and beating shorter but accurate results.
+            def _score(r: OCRResult) -> float:
+                conf = max(r.confidence, 0.0)  # treat -1 (unsupported) as 0
+                length_score = min(len(r.text) / 500.0, 1.0)
+                return conf * 0.7 + length_score * 0.3
+
+            return max(results, key=_score)
+
         return OCRResult(text="", confidence=0.0, engine_name="tesseract_fallback")
 
     def recognize(self, image: np.ndarray, config=None) -> OCRResult:

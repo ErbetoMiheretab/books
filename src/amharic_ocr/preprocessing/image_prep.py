@@ -113,20 +113,27 @@ def preprocess_for_text(image: np.ndarray, use_sauvola: bool = False) -> np.ndar
     """
     Standard preprocessing for Amharic text:
     - Grayscale conversion
-    - Median blur denoising
+    - Median blur denoising (kernel=3 to preserve fine Fidel stroke variations)
     - Otsu thresholding or Sauvola local thresholding
     """
     gray = to_grayscale(image)
-    
-    # Denoising
-    denoised = cv2.medianBlur(gray, 5)
-    
+
+    # Upscale very small images so Otsu doesn't produce a blank binary
+    if min(gray.shape) < 50:
+        scale = 100 / min(gray.shape)
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+    # Use a 3×3 kernel instead of 5×5: Fidel order-mark hooks (e.g. ሰ→ሶ) differ
+    # by just a few pixels; a 5-pixel blur erases them and collapses entire
+    # character columns into the same glyph.
+    denoised = cv2.medianBlur(gray, 3)
+
     if use_sauvola:
         binary = sauvola_threshold(denoised)
     else:
         # Otsu thresholding for text
         _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
+
     return binary
 
 def detect_if_numeral_heavy(image: np.ndarray) -> bool:

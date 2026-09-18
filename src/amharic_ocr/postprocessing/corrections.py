@@ -93,14 +93,20 @@ extract_numerals = extract_ethiopic_numerals
 def post_process_text(text: str, is_numeral_heavy: bool = False) -> str:
     """
     Applies the full post-processing pipeline to OCR text:
-    1. Correct common visual and Latin lookalike errors.
-    2. If numeral-heavy, optionally convert standalone digit strings.
+    1. Correct globally-safe visual confusions (e.g. ፨ → ፰).
+    2. If numeral-heavy, apply Latin-lookalike corrections and digit conversion.
+       These are restricted to numeral-heavy pages to avoid corrupting body text
+       that happens to contain Latin characters adjacent to Ethiopic numerals.
     3. Remove OCR duplication loops.
     """
-    text = correct_common_errors(text)
-    
+    # Step 1: always safe — only replaces characters that are never valid body text
+    text = correct_visual_confusions(text)
+
+    # Step 2: numeral-zone corrections — only on pages dominated by numerals
     if is_numeral_heavy:
+        text = correct_latin_lookalikes(text)
         text = convert_digits_to_ethiopic(text)
 
+    # Step 3: collapse repeated numeral artifacts (safe on all pages)
     text = deduplicate_numeral_loops(text)
     return text

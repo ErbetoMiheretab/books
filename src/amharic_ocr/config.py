@@ -22,7 +22,7 @@ class OCRConfig:
     
     # Tesseract configuration
     tesseract_psm: int = 6
-    tesseract_oem: int = 3
+    tesseract_oem: int = 1
     
     # EasyOCR configuration
     easyocr_gpu: bool = False
