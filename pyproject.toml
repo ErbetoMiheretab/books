@@ -15,10 +15,14 @@ dependencies = [
     "pillow>=12.1.0",
     "pymupdf>=1.26.7",
     "pytesseract>=0.3.13",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
 amharic-ocr = "amharic_ocr.cli:main"
+amharic-ocr-server = "api.server:run_server"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/amharic_ocr"]
+packages = ["src/amharic_ocr", "src/api"]

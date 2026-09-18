@@ -9,7 +9,7 @@ from pathlib import Path
 import requests
 
 
-def test_api(pdf_path: str, base_url: str = "http://localhost:8000"):
+def test_api(pdf_path: str, base_url: str = "http://localhost:8023"):
     """Test the OCR API with a sample PDF."""
     print(f"Testing Amharic OCR API at {base_url}")
     print("=" * 50)
@@ -18,7 +18,10 @@ def test_api(pdf_path: str, base_url: str = "http://localhost:8000"):
     print("\n1. Health Check...")
     response = requests.get(f"{base_url}/health")
     print(f"   Status: {response.status_code}")
-    print(f"   Response: {response.json()}")
+    try:
+        print(f"   Response: {response.json()}")
+    except:
+        print(f"   Response: {response.text}")
 
     # 2. System diagnostics
     print("\n2. System Diagnostics...")

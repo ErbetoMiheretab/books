@@ -8,12 +8,13 @@ This API provides endpoints to:
 - Get system diagnostics
 """
 
+import asyncio
 import os
 import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from amharic_ocr.config import OCRConfig
@@ -73,12 +74,14 @@ async def diagnostics():
 
 @app.post("/ocr")
 async def process_pdf(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     dpi: int = 400,
     split_pages: bool = False,
     use_easyocr: bool = False,
     gpu: bool = False,
     min_char_threshold: int = 50,
+    async_mode: bool = True,
 ):
     """
     Upload a PDF file for OCR processing.
@@ -90,6 +93,7 @@ async def process_pdf(
         use_easyocr: Enable EasyOCR as secondary engine (default: False)
         gpu: Enable GPU acceleration for EasyOCR (default: False)
         min_char_threshold: Minimum character count for quality flagging (default: 50)
+        async_mode: Process asynchronously in background (default: True)
 
     Returns:
         Job ID for tracking processing status
@@ -115,6 +119,7 @@ async def process_pdf(
         "status": "processing",
         "filename": file.filename,
         "pdf_path": str(pdf_path),
+        "results": [],  # Initialize empty results for partial access
         "config": {
             "dpi": dpi,
             "split_pages": split_pages,
@@ -139,33 +144,45 @@ async def process_pdf(
         output_dir=str(output_dir),
     )
 
-    try:
-        # Run OCR pipeline
-        results = run_pipeline(str(pdf_path), config)
+    def process_job():
+        """Background task to process the PDF."""
+        try:
+            # Run OCR pipeline
+            results = run_pipeline(str(pdf_path), config)
 
-        # Update job status
-        job_store[job_id]["status"] = "completed"
-        job_store[job_id]["results"] = results
-        job_store[job_id]["output_dir"] = str(output_dir)
+            # Update job status
+            job_store[job_id]["status"] = "completed"
+            job_store[job_id]["results"] = results
+            job_store[job_id]["output_dir"] = str(output_dir)
 
-        # Get output file paths
-        base_name = Path(file.filename).stem
-        job_store[job_id]["files"] = {
-            "text": str(output_dir / f"{base_name}_output.txt"),
-            "json": str(output_dir / f"{base_name}_output.json"),
-            "review": str(output_dir / f"{base_name}_review_report.txt"),
+            # Get output file paths - pipeline uses the PDF basename (job_id) not original filename
+            pdf_base_name = Path(pdf_path).stem  # This will be the job_id
+            job_store[job_id]["files"] = {
+                "text": str(output_dir / f"{pdf_base_name}_output.txt"),
+                "json": str(output_dir / f"{pdf_base_name}_output.json"),
+                "review": str(output_dir / f"{pdf_base_name}_review_report.txt"),
+            }
+
+        except Exception as e:
+            job_store[job_id]["status"] = "failed"
+            job_store[job_id]["error"] = str(e)
+
+    if async_mode:
+        # Process in background and return immediately
+        background_tasks.add_task(process_job)
+        return {
+            "job_id": job_id,
+            "status": "processing",
+            "message": "PDF uploaded successfully. Processing in background.",
         }
-
-    except Exception as e:
-        job_store[job_id]["status"] = "failed"
-        job_store[job_id]["error"] = str(e)
-        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
-
-    return {
-        "job_id": job_id,
-        "status": job_store[job_id]["status"],
-        "message": "OCR processing completed successfully",
-    }
+    else:
+        # Process synchronously (blocking)
+        process_job()
+        return {
+            "job_id": job_id,
+            "status": job_store[job_id]["status"],
+            "message": "OCR processing completed successfully" if job_store[job_id]["status"] == "completed" else f"Processing failed: {job_store[job_id].get('error')}",
+        }
 
 
 @app.get("/ocr/{job_id}/status")
@@ -261,15 +278,23 @@ async def get_review_report(job_id: str):
 
 
 @app.get("/ocr/{job_id}/results")
-async def get_results_summary(job_id: str):
-    """Get a summary of OCR results with page-level details."""
+async def get_results_summary(job_id: str, include_partial: bool = False):
+    """
+    Get a summary of OCR results with page-level details.
+    
+    Args:
+        job_id: Job identifier
+        include_partial: If True, return partial results even if job is still processing
+    """
     if job_id not in job_store:
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = job_store[job_id]
-    if job["status"] != "completed":
+    
+    # Allow partial results if requested
+    if not include_partial and job["status"] != "completed":
         raise HTTPException(
-            status_code=400, detail=f"Job status: {job['status']}. Results not available yet."
+            status_code=400, detail=f"Job status: {job['status']}. Results not available yet. Use ?include_partial=true to get partial results."
         )
 
     results = job.get("results", [])
@@ -277,7 +302,9 @@ async def get_results_summary(job_id: str):
         content={
             "job_id": job_id,
             "filename": job["filename"],
+            "status": job["status"],
             "total_pages": len(results),
+            "pages_processed": len(results),
             "pages": [
                 {
                     "page": r["page"],
